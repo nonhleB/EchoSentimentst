@@ -17,6 +17,13 @@ if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
 from src.web.server import app  # noqa: F401 — re-exported for gunicorn
+@app.route('/')
+def index():
+    return render_template('index.html')  # or send_from_directory
+
+@app.route('/report')
+def report():
+    return render_template('report.html')
 
 
 if __name__ == "__main__":
