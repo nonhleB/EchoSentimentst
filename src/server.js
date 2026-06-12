@@ -5,16 +5,21 @@ import { dirname, join } from 'path';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
 
-// Render port
 const PORT = process.env.PORT || 3000;
 
-// Middleware
 app.use(express.json({ limit: '2mb' }));
 app.use(express.static(join(__dirname, '../public')));
 
 // Health check
 app.get('/health', (req, res) => {
   res.status(200).send('OK');
+});
+
+// ✅ DEBUG ROUTE (MUST BE HERE)
+app.get('/debug-env', (req, res) => {
+  res.json({
+    hasKey: !!process.env.ANTHROPIC_API_KEY
+  });
 });
 
 // API proxy
@@ -25,14 +30,8 @@ app.post('/api/analyze', async (req, res) => {
 
   if (!apiKey) {
     return res.status(500).json({
-      error: 'ANTHROPIC_API_KEY environment variable is not set.',
+      error: 'ANTHROPIC_API_KEY environment variable is not set.'
     });
-    app.get('/debug-env', (req, res) => {
-  res.json({
-    hasKey: !!process.env.ANTHROPIC_API_KEY,
-    keys: Object.keys(process.env)
-  });
-});
   }
 
   if (!messages || !Array.isArray(messages)) {
@@ -65,6 +64,7 @@ app.post('/api/analyze', async (req, res) => {
     }
 
     res.json(data);
+
   } catch (err) {
     console.error('API proxy error:', err);
     res.status(500).json({
@@ -73,7 +73,7 @@ app.post('/api/analyze', async (req, res) => {
   }
 });
 
-// Start server (Render-safe)
+// Start server
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Echo Sentiment running on port ${PORT}`);
 });
