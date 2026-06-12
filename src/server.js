@@ -5,19 +5,19 @@ import { dirname, join } from 'path';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
 
-// ✅ Render requires process.env.PORT
+// Render port
 const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(express.json({ limit: '2mb' }));
 app.use(express.static(join(__dirname, '../public')));
 
-// Health check route (helps debug Render)
+// Health check
 app.get('/health', (req, res) => {
   res.status(200).send('OK');
 });
 
-// Proxy endpoint — keeps API key server-side
+// API proxy
 app.post('/api/analyze', async (req, res) => {
   const { messages, max_tokens = 1000 } = req.body;
 
@@ -36,7 +36,6 @@ app.post('/api/analyze', async (req, res) => {
   }
 
   try {
-    // ✅ Node 18+ built-in fetch (NO node-fetch needed)
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -68,7 +67,7 @@ app.post('/api/analyze', async (req, res) => {
   }
 });
 
-// ✅ IMPORTANT: Render-safe binding
+// Start server (Render-safe)
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Echo Sentiment running on port ${PORT}`);
 });
