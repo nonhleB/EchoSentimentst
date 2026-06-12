@@ -27,6 +27,12 @@ app.post('/api/analyze', async (req, res) => {
     return res.status(500).json({
       error: 'ANTHROPIC_API_KEY environment variable is not set.',
     });
+    app.get('/debug-env', (req, res) => {
+  res.json({
+    hasKey: !!process.env.ANTHROPIC_API_KEY,
+    keys: Object.keys(process.env)
+  });
+});
   }
 
   if (!messages || !Array.isArray(messages)) {
