@@ -1,3 +1,4 @@
+
 const express = require('express');
 const path = require('path');
 const app = express();
@@ -5,16 +6,18 @@ const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// xAI Grok endpoint — OpenAI-compatible chat completions format
-const GROK_URL = 'https://api.x.ai/v1/chat/completions';
-const GROK_MODEL = 'grok-4.3';
+// Groq API configuration
+const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
+const GROQ_MODEL = 'llama-3.3-70b-versatile';
 
-// Proxy endpoint — keeps the API key server-side
+// Sentiment analysis endpoint
 app.post('/api/analyze', async (req, res) => {
   const { text, batch } = req.body;
 
-  if (!process.env.XAI_API_KEY) {
-    return res.status(500).json({ error: 'XAI_API_KEY not set in environment variables.' });
+  if (!process.env.GROQ_API_KEY) {
+    return res.status(500).json({
+      error: 'GROQ_API_KEY not set in environment variables.'
+    });
   }
 
   const makePrompt = (t) => `Analyze the sentiment of this text. Return ONLY a JSON object with NO markdown, no backticks, no explanation. Format exactly:
@@ -33,50 +36,95 @@ Text: "${t.replace(/"/g, '\\"')}"`;
 
   const batchPrompt = (t) => `Return ONLY JSON, no markdown: {"overall":"positive"|"negative"|"neutral","confidence":<int>}. Text: "${t.replace(/"/g, '\\"')}"`;
 
-  const callGrok = async (prompt, maxTokens) => {
-    const resp = await fetch(GROK_URL, {
+  const callGroq = async (prompt, maxTokens) => {
+    const resp = await fetch(GROQ_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.XAI_API_KEY}`
+        'Authorization': `Bearer ${process.env.GROQ_API_KEY}`
       },
       body: JSON.stringify({
-        model: GROK_MODEL,
+        model: GROQ_MODEL,
         max_tokens: maxTokens,
-        messages: [{ role: 'user', content: prompt }]
+        messages: [
+          {
+            role: 'user',
+            content: prompt
+          }
+        ]
       })
     });
+
     const data = await resp.json();
-    if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
-    const raw = (data.choices?.[0]?.message?.content || '').replace(/```json|```/g, '').trim();
+
+    if (!resp.ok) {
+      throw new Error(
+        `Groq API Error ${resp.status}: ${JSON.stringify(data)}`
+      );
+    }
+
+    const raw = (
+      data.choices?.[0]?.message?.content || ''
+    ).replace(/```json|```/g, '').trim();
+
+    if (!raw) {
+      throw new Error('Groq returned an empty response.');
+    }
+
     return JSON.parse(raw);
   };
 
   try {
     if (batch && Array.isArray(batch)) {
       const results = [];
+
       for (const line of batch) {
         try {
-          const r = await callGrok(batchPrompt(line), 300);
+          const r = await callGroq(batchPrompt(line), 300);
           results.push({ line, r });
         } catch (e) {
-          results.push({ line, r: { overall: 'unknown', confidence: 0 } });
+          console.error('Batch analysis error:', e.message);
+          results.push({
+            line,
+            r: { overall: 'unknown', confidence: 0 }
+          });
         }
       }
+
       return res.json({ results });
     }
 
-    const r = await callGrok(makePrompt(text), 1000);
-    res.json(r);
+    if (typeof text !== 'string' || !text.trim()) {
+      return res.status(400).json({
+        error: 'Please provide text to analyze.'
+      });
+    }
+
+    const r = await callGroq(makePrompt(text), 1000);
+
+    return res.json(r);
+
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('Sentiment analysis error:', err.message);
+
+    return res.status(500).json({
+      error: err.message
+    });
   }
 });
 
-// Catch-all — serve the SPA
+// Serve the frontend
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
+
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, () => {
+  console.log(`Echo Sentiment running on port ${PORT}`);
+  console.log(`Groq API configured: ${!!process.env.GROQ_API_KEY}`);
+});
+
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Echo Sentiment running on port ${PORT}`));
